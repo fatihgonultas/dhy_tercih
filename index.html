@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DHY Çift Tercih Simülatörü V3</title>
+<title>DHY Çift Tercih Simülatörü V4</title>
 <style>
 :root{--bg:#0b1020;--panel:#131a2e;--card:#19233d;--line:#2b395f;--text:#f3f6ff;--muted:#aab5d3;--accent:#6ea8fe;--good:#56d38b;--warn:#ffd166;--bad:#ff7b7b}
 *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:linear-gradient(160deg,#0b1020,#111a36,#0b1020);color:var(--text)}
@@ -25,16 +25,16 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
 </head>
 <body>
 <div class="app">
-<h1>🏥 DHY Çift Tercih Simülatörü V3</h1>
+<h1>🏥 DHY Çift Tercih Simülatörü V4</h1>
 <div class="sub">Eda (Göz) + Kerim (Kalp-Damar) — maksimum 10'ar tercih, hedef il ve birleşme ihtimalleri.</div>
 
 <section class="panel" style="margin-top:16px">
   <div class="top">
     <label>Birleşmek istediğiniz il<select id="target"></select></label>
     <label>Rekabet hassasiyeti: <span id="sensVal">60</span>/100<input id="sens" type="range" min="0" max="100" value="60"></label>
-    <button id="analyze" class="primary">🎯 Analiz Et</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="smartOrder" class="primary">🧠 Hedef için uygun sıralama ayarla</button><button id="analyze">🎯 Analiz Et</button></div>
   </div>
-  <div class="note"><b>Geçiş kuralı:</b> A en iyi, E en kötü. Eşit sınıfa ve daha kötü sınıfa geçiş var: A→A/B/C/D/E, B→B/C/D/E, C→C/D/E, D→D/E, E→E. Kötüden iyiye geçiş yok.</div>
+  <div class="note"><b>Geçiş kuralı:</b> A en iyi, E en kötü. Eşit sınıfa ve daha kötü sınıfa geçiş var: A→A/B/C/D/E, B→B/C/D/E, C→C/D/E, D→D/E, E→E. Kötüden iyiye geçiş yok.<br><b>Akıllı sıralama:</b> Seçtiğiniz hedef ile göre iki kişi için de 10 tercihi otomatik kurar; doğrudan hedef kadrosunu, hedefe geçişi açık tutan yerleri, ortak-il avantajını, kontenjanı ve tahmini rekabeti birlikte puanlar.</div>
 </section>
 
 <div class="grid" style="margin-top:16px">
@@ -42,14 +42,14 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
   <h2>👩‍⚕️ Eda — Göz <span class="badge"><span id="edaCount">0</span>/10</span></h2>
   <div class="poolrow"><label>Kurum ekle<select id="edaPool"></select></label><button id="edaAdd">+ Ekle</button></div>
   <div class="controls"><button id="edaKast">Kastamonu'yu ekle/üste al</button><button id="edaClear">Temizle</button></div>
-  <div id="edaList" class="list"></div>
+  <div id="edaList" class="list"></div><div id="edaWhy" class="note"></div>
 </section>
 
 <section class="panel">
   <h2>👨‍⚕️ Kerim — KVC <span class="badge"><span id="kerimCount">0</span>/10</span></h2>
   <div class="poolrow"><label>Kurum ekle<select id="kerimPool"></select></label><button id="kerimAdd">+ Ekle</button></div>
   <div class="controls"><button id="kerimSafe">Hedef için güvenli 10'u doldur</button><button id="kerimClear">Temizle</button></div>
-  <div id="kerimList" class="list"></div>
+  <div id="kerimList" class="list"></div><div id="kerimWhy" class="note"></div>
 </section>
 </div>
 
@@ -140,6 +140,91 @@ function simulateUnions(sens,runs=12000){
   for(const c of allTargets()){if((e.city===c||canMove('eda',e.city,c))&&(k.city===c||canMove('kerim',k.city,c)))hits.set(c,(hits.get(c)||0)+1)}}
  return [...hits].map(([city,count])=>({city,p:count/runs,same:(direct.get(city)||0)/runs,er:EYE_REGION[city],kr:CARDIO_REGION[city],pop:POP[city]??50})).sort((a,b)=>b.p-a.p)
 }
+
+function candidateSmartScore(person,x,target,spouseAll){
+  const targetRegion=reg(person,target), hereRegion=reg(person,x.city);
+  if(!rank[targetRegion] || !rank[hereRegion]) return -9999;
+
+  const direct = x.city===target;
+  const safe = direct || canMove(person,x.city,target);
+  if(!safe) return -5000 - (POP[x.city]??50);
+
+  let score=0;
+  if(direct) score+=10000;
+
+  // Hedef yolunu açık tutmak ana kriter.
+  score+=1800;
+
+  // Hedef sınıfına yakın güvenli sınıfı biraz öne al.
+  // Örn hedef C ise C, sonra B, sonra A.
+  const gap = rank[targetRegion]-rank[hereRegion];
+  score += Math.max(0, 240-gap*55);
+
+  // Eşin de aynı şehirde doğrudan tercih edebildiği / hedefe geçişi açık bir şehir ise bonus.
+  const spousePerson = person==='eda' ? 'kerim' : 'eda';
+  const spouseHasCity = spouseAll.some(y=>y.city===x.city);
+  if(spouseHasCity){
+    score += 260;
+    const spouseSafeFromCity = canMove(spousePerson,x.city,target) || x.city===target;
+    if(spouseSafeFromCity) score += 220;
+  }
+
+  // Daha fazla kadro = atanma ihtimalini destekleyen bonus.
+  score += Math.min(180,(x.cap||1)*45);
+
+  // Tahmini rekabet düşükse bir miktar avantaj.
+  score += Math.max(0,100-(POP[x.city]??50))*3.2;
+
+  return score;
+}
+
+function buildSmartPrefs(person,target){
+  const all = person==='eda' ? EYE : CARDIO;
+  const spouseAll = person==='eda' ? CARDIO : EYE;
+  const scored = all.map(x=>({x,score:candidateSmartScore(person,x,target,spouseAll)}))
+    .filter(o=>o.score>-4000)
+    .sort((a,b)=>b.score-a.score);
+
+  // Aynı şehirden gereksiz tekrarları azalt ama hedef şehirde birden çok kurum varsa
+  // kontenjan avantajı nedeniyle en fazla 2 kurum tutulabilir.
+  const result=[], cityCounts=new Map();
+  for(const o of scored){
+    if(result.length>=MAX) break;
+    const c=o.x.city, n=cityCounts.get(c)||0;
+    const limit = c===target ? 2 : 1;
+    if(n>=limit) continue;
+    result.push(o.x); cityCounts.set(c,n+1);
+  }
+  return result;
+}
+
+function smartOrderBoth(){
+  const target=document.getElementById('target').value;
+  eda=buildSmartPrefs('eda',target);
+  kerim=buildSmartPrefs('kerim',target);
+  renderAll();
+  renderSmartReasons(target);
+  analyze();
+}
+
+function renderSmartReasons(target){
+  function reasons(person,data,spouseAll){
+    const targetR=reg(person,target);
+    if(!data.length) return 'Uygun güvenli tercih bulunamadı.';
+    return data.slice(0,5).map((x,i)=>{
+      const tags=[];
+      if(x.city===target) tags.push('doğrudan hedef');
+      if(canMove(person,x.city,target) || x.city===target) tags.push('hedefe geçiş açık');
+      if(spouseAll.some(y=>y.city===x.city)) tags.push('ortak il potansiyeli');
+      if((x.cap||1)>1) tags.push(x.cap+' kadro');
+      const p=POP[x.city]??50;
+      tags.push('rekabet '+p+'/100');
+      return `${i+1}. ${x.city} (${reg(person,x.city)}→${targetR}) — ${tags.join(', ')}`;
+    }).join('<br>');
+  }
+  document.getElementById('edaWhy').innerHTML='<b>Akıllı sıralama gerekçesi (ilk 5):</b><br>'+reasons('eda',eda,CARDIO);
+  document.getElementById('kerimWhy').innerHTML='<b>Akıllı sıralama gerekçesi (ilk 5):</b><br>'+reasons('kerim',kerim,EYE);
+}
 function analyze(){
  if(!eda.length||!kerim.length){document.getElementById('paths').innerHTML='<div class="note">Analiz için iki tarafta da en az 1 tercih gerekli.</div>';document.getElementById('unionTable').innerHTML='';return}
  const target=document.getElementById('target').value,sens=+document.getElementById('sens').value,sim=simulate(target,sens);
@@ -160,9 +245,10 @@ document.getElementById('kerimAdd').onclick=()=>{if(kerim.length<MAX){const x=wi
 document.getElementById('edaClear').onclick=()=>{eda=[];renderAll();analyze()};document.getElementById('kerimClear').onclick=()=>{kerim=[];renderAll();analyze()};
 document.getElementById('edaKast').onclick=()=>{const x=EYE.find(y=>y.city==='KASTAMONU');if(x){eda=eda.filter(y=>y.place!==x.place);eda.unshift(x);eda=eda.slice(0,MAX);renderAll();analyze()}};
 document.getElementById('kerimSafe').onclick=()=>{const t=document.getElementById('target').value;kerim=CARDIO.filter(x=>x.city===t||canMove('kerim',x.city,t)).sort((a,b)=>(POP[a.city]??50)-(POP[b.city]??50)).slice(0,MAX);renderAll();analyze()};
+document.getElementById('smartOrder').onclick=smartOrderBoth;
 document.getElementById('analyze').onclick=analyze;document.getElementById('sens').oninput=e=>document.getElementById('sensVal').textContent=e.target.value;document.getElementById('sens').onchange=analyze;
 
-const ts=document.getElementById('target');allTargets().sort((a,b)=>a.localeCompare(b,'tr')).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;ts.appendChild(o)});ts.value='KASTAMONU';ts.onchange=analyze;
-fillDefaults();renderAll();analyze();
+const ts=document.getElementById('target');allTargets().sort((a,b)=>a.localeCompare(b,'tr')).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;ts.appendChild(o)});ts.value='KASTAMONU';ts.onchange=()=>{analyze();renderSmartReasons(ts.value)};
+fillDefaults();renderAll();renderSmartReasons('KASTAMONU');analyze();
 </script>
 </body></html>
