@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DHY Çift Tercih Simülatörü</title>
+<style>
+:root {
+  --bg:#0b1020; --panel:#131a2e; --card:#19233d; --line:#2b395f; --text:#f3f6ff;
+  --muted:#aab5d3; --accent:#6ea8fe; --good:#54d38a; --warn:#ffcc66; --bad:#ff7a7a;
+}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:linear-gradient(160deg,#0b1020,#101832 50%,#0b1020);color:var(--text)}
+.app{max-width:1500px;margin:auto;padding:20px} h1{font-size:clamp(24px,3vw,42px);margin:0 0 8px}
+.sub{color:var(--muted);margin-bottom:18px} .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.panel{background:rgba(19,26,46,.94);border:1px solid var(--line);border-radius:18px;padding:16px}
+.topbar{display:grid;grid-template-columns:1.2fr .8fr auto;gap:12px;align-items:end;margin-bottom:16px}
+label{font-size:13px;color:var(--muted)} select,input{width:100%;margin-top:6px;background:#0e1630;color:var(--text);border:1px solid var(--line);border-radius:12px;padding:11px;font-size:15px}
+button{border:0;border-radius:11px;padding:10px 12px;background:#26375f;color:var(--text);font-weight:700;cursor:pointer}
+button.primary{background:var(--accent);color:#07101f;padding:12px 18px} button:hover{filter:brightness(1.08)}
+.list{display:flex;flex-direction:column;gap:8px;max-height:520px;overflow:auto;padding-right:4px}
+.item{display:grid;grid-template-columns:36px 1fr auto;gap:9px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px}
+.num{font-weight:900;text-align:center;color:var(--accent)} .meta{font-size:12px;color:var(--muted);margin-top:3px}
+.actions{display:flex;gap:5px} .actions button{padding:7px 9px}
+.badge{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid var(--line)}
+.result{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px} .stat b{font-size:24px;display:block;margin-top:4px}
+.good{color:var(--good)} .warn{color:var(--warn)} .bad{color:var(--bad)}
+.path{margin-top:14px;display:grid;gap:10px} .pathRow{background:var(--card);border-left:4px solid var(--accent);padding:12px;border-radius:10px}
+.small{font-size:12px;color:var(--muted)} .controls{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{border-bottom:1px solid var(--line);padding:9px;text-align:left} th{color:var(--muted)}
+.note{margin-top:14px;padding:12px;background:#111a33;border:1px dashed var(--line);border-radius:12px;color:var(--muted);font-size:13px}
+@media(max-width:950px){.grid{grid-template-columns:1fr} .topbar{grid-template-columns:1fr} .result{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.app{padding:12px} .result{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🏥 DHY Çift Tercih Simülatörü</h1>
+  <div class="sub">Eda (Göz) + Kerim (Kalp-Damar) için tercih sıralaması, hedef il ve eş durumu rotası.</div>
+
+  <div class="panel">
+    <div class="topbar">
+      <div>
+        <label>Birleşmek istediğiniz il</label>
+        <select id="target"></select>
+      </div>
+      <div>
+        <label>Rekabet hassasiyeti: <span id="sensVal">60</span>/100</label>
+        <input id="sens" type="range" min="0" max="100" value="60">
+      </div>
+      <button class="primary" id="analyze">🎯 Analiz Et</button>
+    </div>
+    <div class="small">A-E kuralı: daha kötü/eşit gruptan daha iyi/eşit gruba geçiş uygun kabul edilir (E→D/C/B/A, D→D/C/B/A vb.). 1-6 bölge numarası ayrıca puanlanmaz; yalnız A-E esas alınır.</div>
+  </div>
+
+  <div class="grid" style="margin-top:16px">
+    <section class="panel">
+      <h2 style="margin-top:0">👩‍⚕️ Eda — Göz Hastalıkları</h2>
+      <div class="controls">
+        <button id="edaKast">Kastamonu'yu üste al</button>
+        <button id="edaReset">Sıfırla</button>
+      </div>
+      <div id="edaList" class="list" style="margin-top:10px"></div>
+    </section>
+
+    <section class="panel">
+      <h2 style="margin-top:0">👨‍⚕️ Kerim — Kalp ve Damar Cerrahisi</h2>
+      <div class="controls">
+        <button id="kerimSafe">Kastamonu için güvenli sırala</button>
+        <button id="kerimReset">Sıfırla</button>
+      </div>
+      <div id="kerimList" class="list" style="margin-top:10px"></div>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:16px">
+    <h2 style="margin-top:0">📊 Sonuç</h2>
+    <div class="result">
+      <div class="stat"><span class="small">Strateji skoru</span><b id="score">—</b></div>
+      <div class="stat"><span class="small">Hedefe ulaşma tahmini</span><b id="chance">—</b></div>
+      <div class="stat"><span class="small">Başlangıçta aynı il şansı</span><b id="sameCity">—</b></div>
+      <div class="stat"><span class="small">Risk seviyesi</span><b id="risk">—</b></div>
+    </div>
+    <div id="paths" class="path"></div>
+    <div id="tableWrap"></div>
+    <div class="note">
+      ⚠️ Bu sonuçlar resmi kura olasılığı değildir. Geçmiş DHY başvuru verileri elimizde olmadığı için “şehir çekiciliği / kontenjan / tercih sırası / A-E eş durumu uyumu” üzerinden Monte Carlo benzeri sezgisel bir model kullanılır. Gerçek geçmiş atama sonuçları eklenirse model ciddi şekilde güçlenir.
+    </div>
+  </section>
+</div>
+
+<script>
+const EYE = [{"city": "ADIYAMAN", "place": "ADIYAMAN KAHTA DEVLET HASTANESİ", "cap": 1}, {"city": "AFYONKARAHİSAR", "place": "AFYONKARAHİSAR DEVLET HASTANESİ", "cap": 1}, {"city": "AFYONKARAHİSAR", "place": "AFYONKARAHİSAR SANDIKLI DEVLET HASTANESİ", "cap": 1}, {"city": "AĞRI", "place": "AĞRI EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "AĞRI", "place": "AĞRI PATNOS DEVLET HASTANESİ", "cap": 1}, {"city": "ANTALYA", "place": "ANTALYA MANAVGAT DEVLET HASTANESİ", "cap": 1}, {"city": "AYDIN", "place": "AYDIN ADNAN MENDERES ÜNİVERSİTESİ", "cap": 1}, {"city": "BALIKESİR", "place": "BALIKESİR BANDIRMA EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "BATMAN", "place": "BATMAN EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "BİLECİK", "place": "BİLECİK EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "BİTLİS", "place": "BİTLİS DEVLET HASTANESİ", "cap": 1}, {"city": "BİTLİS", "place": "BİTLİS TATVAN DEVLET HASTANESİ", "cap": 1}, {"city": "BURSA", "place": "BURSA İZNİK DEVLET HASTANESİ", "cap": 1}, {"city": "BURSA", "place": "BURSA YENİŞEHİR DEVLET HASTANESİ", "cap": 1}, {"city": "ÇORUM", "place": "ÇORUM OSMANCIK DEVLET HASTANESİ", "cap": 1}, {"city": "DİYARBAKIR", "place": "DİYARBAKIR GAZİ YAŞARGİL EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 2}, {"city": "GAZİANTEP", "place": "GAZİANTEP 25 ARALIK DEVLET HASTANESİ", "cap": 1}, {"city": "GAZİANTEP", "place": "GAZİANTEP CENGİZ GÖKÇEK KADIN DOĞUM VE ÇOCUK HASTALIKLARI HASTANESİ", "cap": 1}, {"city": "GÜMÜŞHANE", "place": "GÜMÜŞHANE DEVLET HASTANESİ", "cap": 1}, {"city": "HAKKARİ", "place": "HAKKARİ YÜKSEKOVA DEVLET HASTANESİ", "cap": 1}, {"city": "HATAY", "place": "HATAY KIRIKHAN DEVLET HASTANESİ", "cap": 1}, {"city": "HATAY", "place": "HATAY REYHANLI DEVLET HASTANESİ", "cap": 1}, {"city": "HATAY", "place": "HATAY SAMANDAĞ DEVLET HASTANESİ", "cap": 1}, {"city": "ISPARTA", "place": "ISPARTA ŞARKİKARAAĞAÇ DR. SADİTTİN BİLGİÇ DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL ARNAVUTKÖY DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL BAĞCILAR EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL BAHÇELİEVLER DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL BAŞAKŞEHİR DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL BAYRAMPAŞA DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL BEYKOZ DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL İKİTELLİ ÇEKMECE MİMAR SİNAN DEVLET HASTANESİ", "cap": 2}, {"city": "İSTANBUL", "place": "İSTANBUL GAZİOSMANPAŞA EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL MARMARA CEZA İNFAZ KURUMU DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL PENDİK DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL SANCAKTEPE ŞEHİT PROF. DR. İLHAN VARANK EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 2}, {"city": "İSTANBUL", "place": "İSTANBUL ŞİLE DEVLET HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL TAKSİM EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "İSTANBUL", "place": "İSTANBUL TUZLA DEVLET HASTANESİ", "cap": 1}, {"city": "KAHRAMANMARAŞ", "place": "KAHRAMANMARAŞ ANDIRIN DEVLET HASTANESİ", "cap": 1}, {"city": "KAHRAMANMARAŞ", "place": "KAHRAMANMARAŞ PAZARCIK DEVLET HASTANESİ", "cap": 1}, {"city": "KARAMAN", "place": "KARAMAN EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "KASTAMONU", "place": "KASTAMONU EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 2}, {"city": "KIRKLARELİ", "place": "KIRKLARELİ LÜLEBURGAZ DEVLET HASTANESİ", "cap": 1}, {"city": "KİLİS", "place": "KİLİS PROF. DR. ALAEDDİN YAVAŞCA DEVLET HASTANESİ", "cap": 1}, {"city": "KOCAELİ", "place": "KOCAELİ DARICA FARABİ EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "KOCAELİ", "place": "KOCAELİ GEBZE FATİH DEVLET HASTANESİ", "cap": 2}, {"city": "KOCAELİ", "place": "KOCAELİ İZMİT SEKA DEVLET HASTANESİ", "cap": 1}, {"city": "KONYA", "place": "KONYA EREĞLİ DEVLET HASTANESİ", "cap": 1}, {"city": "MALATYA", "place": "MALATYA BATTALGAZİ DEVLET HASTANESİ", "cap": 1}, {"city": "MANİSA", "place": "MANİSA DEMİRCİ DEVLET HASTANESİ", "cap": 1}, {"city": "MANİSA", "place": "MANİSA KULA DEVLET HASTANESİ", "cap": 1}, {"city": "MARDİN", "place": "MARDİN EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 2}, {"city": "MARDİN", "place": "MARDİN KIZILTEPE DEVLET HASTANESİ", "cap": 1}, {"city": "MERSİN", "place": "MERSİN GÜLNAR DEVLET HASTANESİ", "cap": 1}, {"city": "MERSİN", "place": "MERSİN MUT DEVLET HASTANESİ", "cap": 1}, {"city": "MUĞLA", "place": "MUĞLA KÖYCEĞİZ DEVLET HASTANESİ", "cap": 1}, {"city": "MUŞ", "place": "MUŞ BULANIK DEVLET HASTANESİ", "cap": 1}, {"city": "MUŞ", "place": "MUŞ DEVLET HASTANESİ", "cap": 2}, {"city": "ORDU", "place": "ORDU AYBASTI DEVLET HASTANESİ", "cap": 1}, {"city": "ORDU", "place": "ORDU ÜNYE DEVLET HASTANESİ", "cap": 1}, {"city": "OSMANİYE", "place": "OSMANİYE EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "SİİRT", "place": "SİİRT EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "SİNOP", "place": "SİNOP ATATÜRK DEVLET HASTANESİ", "cap": 1}, {"city": "ŞANLIURFA", "place": "ŞANLIURFA SİVEREK DEVLET HASTANESİ", "cap": 1}, {"city": "ŞANLIURFA", "place": "ŞANLIURFA ŞEHİR HASTANESİ", "cap": 4}, {"city": "ŞANLIURFA", "place": "ŞANLIURFA VİRANŞEHİR DEVLET HASTANESİ", "cap": 1}, {"city": "ŞIRNAK", "place": "ŞIRNAK DEVLET HASTANESİ", "cap": 1}, {"city": "ŞIRNAK", "place": "ŞIRNAK SİLOPİ DEVLET HASTANESİ", "cap": 1}, {"city": "TEKİRDAĞ", "place": "TEKİRDAĞ ÇORLU DEVLET HASTANESİ", "cap": 2}, {"city": "TEKİRDAĞ", "place": "TEKİRDAĞ ÇOSB KAPAKLI DEVLET HASTANESİ", "cap": 1}, {"city": "TOKAT", "place": "TOKAT NİKSAR DEVLET HASTANESİ", "cap": 1}, {"city": "TUNCELİ", "place": "TUNCELİ DEVLET HASTANESİ", "cap": 1}, {"city": "UŞAK", "place": "UŞAK EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "VAN", "place": "VAN ERCİŞ ŞEHİT RIDVAN ÇEVİK DEVLET HASTANESİ", "cap": 1}, {"city": "VAN", "place": "VAN MURADİYE DEVLET HASTANESİ", "cap": 1}, {"city": "VAN", "place": "VAN ÖZALP DEVLET HASTANESİ", "cap": 1}, {"city": "YOZGAT", "place": "YOZGAT BOĞAZLIYAN DEVLET HASTANESİ", "cap": 1}, {"city": "YOZGAT", "place": "YOZGAT SARIKAYA DEVLET HASTANESİ", "cap": 1}, {"city": "ZONGULDAK", "place": "ZONGULDAK ÇAYCUMA DEVLET HASTANESİ", "cap": 1}, {"city": "BALIKESİR", "place": "BALIKESİR AYVALIK İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "BATMAN", "place": "BATMAN BEŞİRİ İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "BİNGÖL", "place": "BİNGÖL GENÇ İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "BİNGÖL", "place": "BİNGÖL İL SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "BİTLİS", "place": "BİTLİS AHLAT İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "ERZİNCAN", "place": "ERZİNCAN MERKEZ TOPLUM SAĞLIĞI MERKEZİ", "cap": 1}, {"city": "HATAY", "place": "HATAY İL SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "KAHRAMANMARAŞ", "place": "KAHRAMANMARAŞ GÖKSUN İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "KAHRAMANMARAŞ", "place": "KAHRAMANMARAŞ İL SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "KARS", "place": "KARS İL SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "KARS", "place": "KARS KAĞIZMAN İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "KİLİS", "place": "KİLİS İL SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "KONYA", "place": "KONYA BEYŞEHİR İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "MUŞ", "place": "MUŞ BULANIK İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "RİZE", "place": "RİZE ARDEŞEN İLÇE SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}, {"city": "RİZE", "place": "RİZE MERKEZ TOPLUM SAĞLIĞI MERKEZİ", "cap": 1}, {"city": "SİİRT", "place": "SİİRT İL SAĞLIK MÜDÜRLÜĞÜ", "cap": 1}];
+const CARDIO = [{"city": "ADIYAMAN", "place": "ADIYAMAN EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "AĞRI", "place": "AĞRI EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "BARTIN", "place": "BARTIN DEVLET HASTANESİ", "cap": 1}, {"city": "BİTLİS", "place": "BİTLİS TATVAN DEVLET HASTANESİ", "cap": 1}, {"city": "ÇANKIRI", "place": "ÇANKIRI DEVLET HASTANESİ", "cap": 1}, {"city": "DİYARBAKIR", "place": "DİYARBAKIR DAĞ KAPI DEVLET HASTANESİ", "cap": 1}, {"city": "ERZİNCAN", "place": "ERZİNCAN MENGÜCEK GAZİ EĞİTİM VE ARAŞTIRMA HASTANESİ", "cap": 1}, {"city": "HAKKARİ", "place": "HAKKARİ DEVLET HASTANESİ", "cap": 1}, {"city": "SİVAS", "place": "SİVAS NUMUNE HASTANESİ", "cap": 1}, {"city": "ŞANLIURFA", "place": "ŞANLIURFA ŞEHİR HASTANESİ", "cap": 2}, {"city": "TOKAT", "place": "TOKAT DEVLET HASTANESİ", "cap": 1}, {"city": "YOZGAT", "place": "YOZGAT ŞEHİR HASTANESİ", "cap": 1}];
+const EYE_REGION = {"ANKARA": "A", "İZMİR": "B", "İSTANBUL": "C", "BURSA": "C", "ADANA": "C", "KOCAELİ": "D", "MERSİN": "E", "GAZİANTEP": "E", "KAYSERİ": "A", "ESKİŞEHİR": "A", "ANTALYA": "B", "BALIKESİR": "B", "KONYA": "B", "YALOVA": "B", "ZONGULDAK": "B", "EDİRNE": "B", "AYDIN": "C", "ÇANAKKALE": "C", "MUĞLA": "C", "MANİSA": "C", "DENİZLİ": "C", "SAKARYA": "C", "TEKİRDAĞ": "D", "HATAY": "E", "KIRKLARELİ": "A", "BOLU": "A", "RİZE": "A", "ISPARTA": "A", "GİRESUN": "A", "BARTIN": "A", "KARABÜK": "A", "UŞAK": "B", "BURDUR": "B", "KIRIKKALE": "B", "SAMSUN": "B", "BİLECİK": "B", "ORDU": "C", "TRABZON": "C", "DÜZCE": "D", "KÜTAHYA": "D", "AFYONKARAHİSAR": "D", "OSMANİYE": "E", "NİĞDE": "A", "KARAMAN": "A", "ÇORUM": "A", "KIRŞEHİR": "B", "AMASYA": "C", "NEVŞEHİR": "C", "TOKAT": "C", "SİNOP": "C", "KASTAMONU": "C", "AKSARAY": "D", "YOZGAT": "D", "ÇANKIRI": "D", "KİLİS": "E", "ERZİNCAN": "A", "ARTVİN": "A", "ERZURUM": "C", "KAHRAMANMARAŞ": "C", "MALATYA": "C", "SİVAS": "D", "ELAZIĞ": "E", "DİYARBAKIR": "E", "ŞANLIURFA": "E", "KARS": "B", "BİNGÖL": "B", "IĞDIR": "C", "HAKKARİ": "C", "SİİRT": "D", "ADIYAMAN": "D", "TUNCELİ": "D", "AĞRI": "D", "ARDAHAN": "D", "BAYBURT": "D", "BİTLİS": "E", "BATMAN": "E", "MARDİN": "E", "VAN": "E", "ŞIRNAK": "E", "MUŞ": "E", "GÜMÜŞHANE": "E"};
+const CARDIO_REGION = {"ANKARA": "A", "BURSA": "B", "ADANA": "C", "İZMİR": "C", "İSTANBUL": "C", "GAZİANTEP": "C", "KOCAELİ": "C", "MERSİN": "C", "ESKİŞEHİR": "A", "ANTALYA": "A", "AYDIN": "A", "TEKİRDAĞ": "A", "MUĞLA": "A", "DENİZLİ": "A", "EDİRNE": "A", "YALOVA": "A", "ÇANAKKALE": "A", "SAKARYA": "B", "ZONGULDAK": "C", "BALIKESİR": "C", "MANİSA": "C", "KAYSERİ": "D", "KONYA": "D", "HATAY": "E", "BİLECİK": "A", "KIRKLARELİ": "A", "ISPARTA": "A", "BURDUR": "B", "AFYONKARAHİSAR": "B", "GİRESUN": "B", "UŞAK": "B", "KARABÜK": "B", "SAMSUN": "C", "ORDU": "C", "RİZE": "C", "OSMANİYE": "C", "TRABZON": "C", "KIRIKKALE": "D", "BOLU": "D", "DÜZCE": "D", "BARTIN": "E", "KÜTAHYA": "E", "NİĞDE": "A", "AMASYA": "A", "KIRŞEHİR": "B", "KİLİS": "B", "SİNOP": "B", "KARAMAN": "B", "AKSARAY": "C", "YOZGAT": "C", "KASTAMONU": "D", "TOKAT": "D", "NEVŞEHİR": "D", "ÇORUM": "D", "ÇANKIRI": "E", "MALATYA": "C", "ELAZIĞ": "C", "ERZURUM": "C", "KAHRAMANMARAŞ": "D", "SİVAS": "E", "DİYARBAKIR": "E", "ARTVİN": "E", "ERZİNCAN": "E", "ŞANLIURFA": "E", "IĞDIR": "B", "KARS": "B", "BAYBURT": "B", "GÜMÜŞHANE": "B", "ADIYAMAN": "C", "SİİRT": "C", "BİNGÖL": "D", "MARDİN": "D", "VAN": "D", "HAKKARİ": "D", "BATMAN": "D", "TUNCELİ": "E", "ARDAHAN": "E", "BİTLİS": "E", "AĞRI": "E", "MUŞ": "E", "ŞIRNAK": "E"};
+const POP = {"İSTANBUL": 92, "ANKARA": 90, "İZMİR": 90, "ANTALYA": 86, "BURSA": 82, "KOCAELİ": 78, "AYDIN": 76, "MUĞLA": 78, "TEKİRDAĞ": 70, "BALIKESİR": 69, "MANİSA": 68, "ÇANAKKALE": 70, "ESKİŞEHİR": 78, "SAKARYA": 67, "MERSİN": 72, "KONYA": 69, "KAYSERİ": 66, "EDİRNE": 65, "YALOVA": 71, "KIRKLARELİ": 62, "BARTIN": 58, "KASTAMONU": 55, "ZONGULDAK": 57, "BOLU": 62, "KARABÜK": 55, "ÇANKIRI": 47, "TOKAT": 48, "YOZGAT": 43, "SİVAS": 50, "ERZİNCAN": 45, "ŞANLIURFA": 42, "DİYARBAKIR": 40, "ADIYAMAN": 34, "AĞRI": 24, "BİTLİS": 25, "HAKKARİ": 18, "ŞIRNAK": 20, "MUŞ": 22, "MARDİN": 34, "BATMAN": 35, "SİİRT": 28, "GÜMÜŞHANE": 32, "BİNGÖL": 28, "KARS": 30, "TUNCELİ": 33, "HATAY": 52, "GAZİANTEP": 56, "OSMANİYE": 46, "MALATYA": 47, "KAHRAMANMARAŞ": 44, "KİLİS": 30, "AFYONKARAHİSAR": 52, "ISPARTA": 55, "UŞAK": 52, "KARAMAN": 48, "ÇORUM": 48, "ORDU": 60, "RİZE": 60, "SİNOP": 58};
+const rank={A:1,B:2,C:3,D:4,E:5};
+
+let eda=[...EYE], kerim=[...CARDIO], edaOriginal=[...EYE], kerimOriginal=[...CARDIO];
+
+function norm(s){return (s||'').toLocaleUpperCase('tr-TR')}
+function reg(person,city){return (person==='eda'?EYE_REGION:CARDIO_REGION)[city] || '?'}
+function canMove(person,fromCity,targetCity){
+  const a=reg(person,fromCity), b=reg(person,targetCity);
+  return rank[a] && rank[b] ? rank[a]>=rank[b] : false;
+}
+function renderList(id,data,person){
+  const host=document.getElementById(id); host.innerHTML='';
+  data.forEach((x,i)=>{
+    const div=document.createElement('div'); div.className='item';
+    div.innerHTML=`<div class="num">${i+1}</div>
+      <div><div><b>${x.city}</b> <span class="badge">${reg(person,x.city)} grup</span></div>
+      <div class="meta">${x.place} · ${x.cap} kadro · Rekabet ${POP[x.city]??50}/100</div></div>
+      <div class="actions"><button title="Yukarı">↑</button><button title="Aşağı">↓</button></div>`;
+    const bs=div.querySelectorAll('button');
+    bs[0].onclick=()=>{if(i>0){[data[i-1],data[i]]=[data[i],data[i-1]];renderAll()}};
+    bs[1].onclick=()=>{if(i<data.length-1){[data[i+1],data[i]]=[data[i],data[i+1]];renderAll()}};
+    host.appendChild(div);
+  });
+}
+function renderAll(){renderList('edaList',eda,'eda');renderList('kerimList',kerim,'kerim')}
+
+function baseWin(item,index,sens){
+  const pop=POP[item.city]??50;
+  const order=Math.max(5,100-index*2.2);
+  const quota=Math.min(25,(item.cap-1)*8);
+  const competition=(pop*(sens/100))*0.62;
+  return Math.max(3,Math.min(92, 32 + order*0.45 + quota - competition));
+}
+function weightedPick(data,sens){
+  const weights=data.map((x,i)=>Math.max(0.2,baseWin(x,i,sens)));
+  const total=weights.reduce((a,b)=>a+b,0);
+  let r=Math.random()*total;
+  for(let i=0;i<data.length;i++){r-=weights[i];if(r<=0)return data[i]}
+  return data[data.length-1];
+}
+function simulate(target,sens,runs=12000){
+  let reach=0,same=0,directTarget=0;
+  const pairs=new Map();
+  for(let n=0;n<runs;n++){
+    const e=weightedPick(eda,sens), k=weightedPick(kerim,sens);
+    if(e.city===k.city) same++;
+    const eTo=canMove('eda',e.city,target), kTo=canMove('kerim',k.city,target);
+    const eDirect=e.city===target, kDirect=k.city===target;
+    if(eDirect||kDirect) directTarget++;
+    if((eDirect && kTo)||(kDirect && eTo)||(eTo && kTo)) reach++;
+    const key=e.city+'|'+k.city;
+    pairs.set(key,(pairs.get(key)||0)+1);
+  }
+  return {reach:reach/runs,same:same/runs,direct:directTarget/runs,pairs:[...pairs.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)};
+}
+function pct(x){return (x*100).toFixed(1)+'%'}
+function riskLabel(ch){
+  if(ch>=.72)return ['Düşük','good'];
+  if(ch>=.5)return ['Orta','warn'];
+  return ['Yüksek','bad'];
+}
+
+function analyze(){
+  const target=document.getElementById('target').value;
+  const sens=+document.getElementById('sens').value;
+  const tER=EYE_REGION[target], tKR=CARDIO_REGION[target];
+  if(!tER||!tKR){alert('Bu hedef il için iki branşın da bölge sınıfı bulunmuyor.');return}
+  const sim=simulate(target,sens);
+  const eDirect=eda.findIndex(x=>x.city===target);
+  const kDirect=kerim.findIndex(x=>x.city===target);
+  let score=35;
+  if(eDirect>=0)score+=Math.max(5,25-eDirect*.8);
+  if(kDirect>=0)score+=Math.max(5,20-kDirect*1.2);
+  score+=Math.min(18,eda.filter(x=>canMove('eda',x.city,target)).length*.8);
+  score+=Math.min(18,kerim.filter(x=>canMove('kerim',x.city,target)).length*1.5);
+  score-=((POP[target]??50)*sens/100)*.22;
+  score=Math.round(Math.max(1,Math.min(100,score)));
+
+  const [rl,rc]=riskLabel(sim.reach);
+  document.getElementById('score').textContent=score+'/100';
+  document.getElementById('chance').textContent=pct(sim.reach);
+  document.getElementById('sameCity').textContent=pct(sim.same);
+  document.getElementById('risk').innerHTML=`<span class="${rc}">${rl}</span>`;
+
+  const eSafe=eda.filter(x=>canMove('eda',x.city,target)).slice(0,8);
+  const kSafe=kerim.filter(x=>canMove('kerim',x.city,target)).slice(0,8);
+  document.getElementById('paths').innerHTML=`
+    <div class="pathRow"><b>🎯 Hedef: ${target}</b> — Göz <b>${tER}</b> grup, KVC <b>${tKR}</b> grup.</div>
+    <div class="pathRow"><b>Eda:</b> ${eDirect>=0 ? 'Hedef il doğrudan listede (#'+(eDirect+1)+', '+eda[eDirect].cap+' kadro).' : 'Hedef il doğrudan listede yok.'}
+      <div class="small">Hedefe eş durumu açısından uygun ilk alternatifler: ${eSafe.map(x=>x.city+' ('+reg('eda',x.city)+')').join(', ')||'yok'}</div></div>
+    <div class="pathRow"><b>Kerim:</b> ${kDirect>=0 ? 'Hedef il doğrudan listede (#'+(kDirect+1)+').' : 'Hedef il doğrudan listede yok; eş durumu rotası gerekli.'}
+      <div class="small">Hedefe eş durumu açısından uygun ilk alternatifler: ${kSafe.map(x=>x.city+' ('+reg('kerim',x.city)+')').join(', ')||'yok'}</div></div>`;
+
+  const rows=sim.pairs.map(([key,count])=>{
+    const [ec,kc]=key.split('|');
+    const ok=(canMove('eda',ec,target)&&canMove('kerim',kc,target)) || ec===target || kc===target;
+    return `<tr><td>${ec}</td><td>${kc}</td><td>${pct(count/12000)}</td><td class="${ok?'good':'bad'}">${ok?'Hedef yolu açık':'Riskli'}</td></tr>`;
+  }).join('');
+  document.getElementById('tableWrap').innerHTML=`<h3>En sık oluşan örnek senaryolar</h3><table><thead><tr><th>Eda</th><th>Kerim</th><th>Model frekansı</th><th>${target} rotası</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function safeSortKerim(){
+  const target=document.getElementById('target').value;
+  kerim.sort((a,b)=>{
+    const sa=canMove('kerim',a.city,target)?1:0, sb=canMove('kerim',b.city,target)?1:0;
+    if(sa!==sb)return sb-sa;
+    const pa=POP[a.city]??50,pb=POP[b.city]??50;
+    if(pa!==pb)return pa-pb;
+    return b.cap-a.cap;
+  });
+  renderAll(); analyze();
+}
+document.getElementById('edaReset').onclick=()=>{eda=[...edaOriginal];renderAll();analyze()};
+document.getElementById('kerimReset').onclick=()=>{kerim=[...kerimOriginal];renderAll();analyze()};
+document.getElementById('edaKast').onclick=()=>{
+  eda.sort((a,b)=> (a.city==='KASTAMONU'?-1:b.city==='KASTAMONU'?1:0));
+  renderAll(); analyze();
+};
+document.getElementById('kerimSafe').onclick=safeSortKerim;
+document.getElementById('analyze').onclick=analyze;
+document.getElementById('sens').oninput=e=>{document.getElementById('sensVal').textContent=e.target.value};
+document.getElementById('sens').onchange=analyze;
+
+const targetSel=document.getElementById('target');
+const cities=[...new Set([...Object.keys(EYE_REGION),...Object.keys(CARDIO_REGION)])].filter(c=>EYE_REGION[c]&&CARDIO_REGION[c]).sort((a,b)=>a.localeCompare(b,'tr'));
+cities.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;targetSel.appendChild(o)});
+targetSel.value='KASTAMONU';
+targetSel.onchange=analyze;
+renderAll(); analyze();
+</script>
+</body>
+</html>
