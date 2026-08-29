@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DHY Çift Tercih Simülatörü V7</title>
+<title>DHY Çift Tercih Simülatörü V8</title>
 <style>
 :root{--bg:#0b1020;--panel:#131a2e;--card:#19233d;--line:#2b395f;--text:#f3f6ff;--muted:#aab5d3;--accent:#6ea8fe;--good:#56d38b;--warn:#ffd166;--bad:#ff7b7b}
 *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:linear-gradient(160deg,#0b1020,#111a36,#0b1020);color:var(--text)}
@@ -25,13 +25,19 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
 </head>
 <body>
 <div class="app">
-<h1>🏥 DHY Çift Tercih Simülatörü V7</h1>
+<h1>🏥 DHY Çift Tercih Simülatörü V8</h1>
 <div class="sub">Eda (Göz) + Kerim (Kalp-Damar) — maksimum 10'ar tercih, hedef il ve birleşme ihtimalleri.</div>
 
 <section class="panel" style="margin-top:16px">
   <div class="top">
     <label>Birleşmek istediğiniz il<select id="target"></select></label>
-    <label>Rekabet hassasiyeti: <span id="sensVal">60</span>/100<input id="sens" type="range" min="0" max="100" value="60"></label>
+    <div>
+      <label>Rekabet hassasiyeti: <span id="sensVal">60</span>/100<input id="sens" type="range" min="0" max="100" value="60"></label>
+      <label style="margin-top:10px;display:flex;align-items:center;gap:8px;color:var(--text);font-size:14px">
+        <input id="noDistrict" type="checkbox" style="width:auto;margin:0;transform:scale(1.2)">
+        Merkez dışı ilçe istemiyorum
+      </label>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="smartOrder" class="primary">🧠 Hedef için uygun sıralama ayarla</button><button id="analyze">🎯 Analiz Et</button></div>
   </div>
   <div class="note"><b>Geçiş kuralı:</b> A en iyi, E en kötü. Eşit sınıfa ve daha kötü sınıfa geçiş var: A→A/B/C/D/E, B→B/C/D/E, C→C/D/E, D→D/E, E→E. Kötüden iyiye geçiş yok.<br><b>Akıllı sıralama:</b> Seçtiğiniz hedef il her iki branşta da doğrudan tercih edilebiliyorsa, o ildeki kurum(lar) otomatik olarak listenin en başına alınır; birden fazla kurum varsa kontenjanı yüksek olan önce gelir. Kalan tercihler hedefe geçiş güvenliği, ortak-il avantajı, kontenjan ve tahmini rekabete göre sıralanır.</div>
@@ -90,6 +96,37 @@ const EYE_REGION={"ANKARA": "A", "İZMİR": "B", "İSTANBUL": "C", "BURSA": "C",
 const CARDIO_REGION={"ANKARA": "A", "BURSA": "B", "ADANA": "C", "İZMİR": "C", "İSTANBUL": "C", "GAZİANTEP": "C", "KOCAELİ": "C", "MERSİN": "C", "ESKİŞEHİR": "A", "ANTALYA": "A", "AYDIN": "A", "TEKİRDAĞ": "A", "MUĞLA": "A", "DENİZLİ": "A", "EDİRNE": "A", "YALOVA": "A", "ÇANAKKALE": "A", "SAKARYA": "B", "ZONGULDAK": "C", "BALIKESİR": "C", "MANİSA": "C", "KAYSERİ": "D", "KONYA": "D", "HATAY": "E", "BİLECİK": "A", "KIRKLARELİ": "A", "ISPARTA": "A", "BURDUR": "B", "AFYONKARAHİSAR": "B", "GİRESUN": "B", "UŞAK": "B", "KARABÜK": "B", "SAMSUN": "C", "ORDU": "C", "RİZE": "C", "OSMANİYE": "C", "TRABZON": "C", "KIRIKKALE": "D", "BOLU": "D", "DÜZCE": "D", "BARTIN": "E", "KÜTAHYA": "E", "NİĞDE": "A", "AMASYA": "A", "KIRŞEHİR": "B", "KİLİS": "B", "SİNOP": "B", "KARAMAN": "B", "AKSARAY": "C", "YOZGAT": "C", "KASTAMONU": "D", "TOKAT": "D", "NEVŞEHİR": "D", "ÇORUM": "D", "ÇANKIRI": "E", "MALATYA": "C", "ELAZIĞ": "C", "ERZURUM": "C", "KAHRAMANMARAŞ": "D", "SİVAS": "E", "DİYARBAKIR": "E", "ARTVİN": "E", "ERZİNCAN": "E", "ŞANLIURFA": "E", "IĞDIR": "B", "KARS": "B", "BAYBURT": "B", "GÜMÜŞHANE": "B", "ADIYAMAN": "C", "SİİRT": "C", "BİNGÖL": "D", "MARDİN": "D", "VAN": "D", "HAKKARİ": "D", "BATMAN": "D", "TUNCELİ": "E", "ARDAHAN": "E", "BİTLİS": "E", "AĞRI": "E", "MUŞ": "E", "ŞIRNAK": "E"};
 const POP={"İSTANBUL": 92, "ANKARA": 90, "İZMİR": 90, "ANTALYA": 86, "BURSA": 82, "KOCAELİ": 78, "AYDIN": 76, "MUĞLA": 78, "TEKİRDAĞ": 70, "BALIKESİR": 69, "MANİSA": 68, "ÇANAKKALE": 70, "ESKİŞEHİR": 78, "SAKARYA": 67, "MERSİN": 72, "KONYA": 69, "KAYSERİ": 66, "EDİRNE": 65, "YALOVA": 71, "KIRKLARELİ": 62, "BARTIN": 58, "KASTAMONU": 55, "ZONGULDAK": 57, "BOLU": 62, "KARABÜK": 55, "ÇANKIRI": 47, "TOKAT": 48, "YOZGAT": 43, "SİVAS": 50, "ERZİNCAN": 45, "ŞANLIURFA": 42, "DİYARBAKIR": 40, "ADIYAMAN": 34, "AĞRI": 24, "BİTLİS": 25, "HAKKARİ": 18, "ŞIRNAK": 20, "MUŞ": 22, "MARDİN": 34, "BATMAN": 35, "SİİRT": 28, "GÜMÜŞHANE": 32, "BİNGÖL": 28, "KARS": 30, "TUNCELİ": 33, "HATAY": 52, "GAZİANTEP": 56, "OSMANİYE": 46, "MALATYA": 47, "KAHRAMANMARAŞ": 44, "KİLİS": 30, "AFYONKARAHİSAR": 52, "ISPARTA": 55, "UŞAK": 52, "KARAMAN": 48, "ÇORUM": 48, "ORDU": 60, "RİZE": 60, "SİNOP": 58};
 const rank={A:1,B:2,C:3,D:4,E:5}, MAX=10;
+const DISTRICT_HINTS=[
+ 'KAHTA','SANDIKLI','PATNOS','MANAVGAT','BANDIRMA','TATVAN','İZNİK','YENİŞEHİR','OSMANCIK',
+ 'YÜKSEKOVA','KIRIKHAN','REYHANLI','SAMANDAĞ','ŞARKİKARAAĞAÇ','ANDIRIN','PAZARCIK',
+ 'LÜLEBURGAZ','GEBZE','DARICA','EREĞLİ','DEMİRCİ','KULA','KIZILTEPE','GÜLNAR','MUT',
+ 'KÖYCEĞİZ','BULANIK','AYBASTI','ÜNYE','SİVEREK','VİRANŞEHİR','SİLOPİ','ÇORLU',
+ 'KAPAKLI','NİKSAR','ERCİŞ','MURADİYE','ÖZALP','BOĞAZLIYAN','SARIKAYA','ÇAYCUMA',
+ 'AYVALIK','BEŞİRİ','GENÇ','AHLAT','GÖKSUN','KAĞIZMAN','BEYŞEHİR','ARDEŞEN'
+];
+
+function isDistrictChoice(x){
+  const p=(x.place||'').toLocaleUpperCase('tr-TR');
+  if(p.includes('İLÇE SAĞLIK MÜDÜRLÜĞÜ')) return true;
+  // Büyükşehir merkezindeki İstanbul hastanelerini sırf ilçe adı taşıyor diye eleme.
+  if(x.city==='İSTANBUL') return false;
+  return DISTRICT_HINTS.some(k=>p.includes(k));
+}
+
+function districtFilterOn(){
+  return !!document.getElementById('noDistrict')?.checked;
+}
+
+function eligibleChoices(all){
+  return districtFilterOn() ? all.filter(x=>!isDistrictChoice(x)) : all;
+}
+
+function pruneDistrictSelections(){
+  if(!districtFilterOn()) return;
+  eda=eda.filter(x=>!isDistrictChoice(x)).slice(0,MAX);
+  kerim=kerim.filter(x=>!isDistrictChoice(x)).slice(0,MAX);
+}
+
 let eda=[],kerim=[];
 
 function reg(person,city){return (person==='eda'?EYE_REGION:CARDIO_REGION)[city]||'?'}
@@ -123,7 +160,7 @@ function renderPool(id,all,selected){
 }
 function renderAll(){
  renderList('edaList',eda,'eda');renderList('kerimList',kerim,'kerim');
- window.eAvail=renderPool('edaPool',EYE,eda);window.kAvail=renderPool('kerimPool',CARDIO,kerim);
+ window.eAvail=renderPool('edaPool',eligibleChoices(EYE),eda);window.kAvail=renderPool('kerimPool',eligibleChoices(CARDIO),kerim);
  document.getElementById('edaCount').textContent=eda.length;document.getElementById('kerimCount').textContent=kerim.length;
  document.getElementById('edaAdd').disabled=eda.length>=MAX;document.getElementById('kerimAdd').disabled=kerim.length>=MAX;
 }
@@ -226,8 +263,8 @@ function candidateSmartScore(person,x,target,spouseAll){
 }
 
 function buildSmartPrefs(person,target){
-  const all = person==='eda' ? EYE : CARDIO;
-  const spouseAll = person==='eda' ? CARDIO : EYE;
+  const all = eligibleChoices(person==='eda' ? EYE : CARDIO);
+  const spouseAll = eligibleChoices(person==='eda' ? CARDIO : EYE);
 
   // 1) Hedef il bu branşta doğrudan tercih edilebiliyorsa MUTLAKA ilk sıraya gelir.
   // Aynı hedef ilde birden fazla kurum varsa kontenjanı yüksek olan önce gelir.
@@ -272,6 +309,9 @@ function explainSmartPlan(target){
   if(!box) return;
 
   const lines=[];
+  if(districtFilterOn()){
+    lines.push(`<b>İlçe filtresi açık:</b> Merkez dışı ilçe kadroları otomatik tercih hesabına dahil edilmiyor. Örneğin Siverek, Niksar, Tatvan, Kahta gibi seçenekler eleniyor.`);
+  }
   const targetEye=reg('eda',target);
   const targetKvc=reg('kerim',target);
 
@@ -304,7 +344,7 @@ function explainSmartPlan(target){
         text+=`Kerim’in listesinde ${target} doğrudan olmadığı için, Eda’nın bu tercihten ${target}’a eş durumu yolu kendiliğinden oluşmaz.`;
       }
     }
-    if(CARDIO.some(y=>y.city===x.city)) text+=` Ayrıca Kerim de ${x.city}’ı tercih edebildiği için doğrudan aynı ilde başlama ihtimali vardır.`;
+    if(eligibleChoices(CARDIO).some(y=>y.city===x.city)) text+=` Ayrıca Kerim de ${x.city}’ı tercih edebildiği için doğrudan aynı ilde başlama ihtimali vardır.`;
     if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma açısından avantajdır.`;
     lines.push(text);
   });
@@ -324,7 +364,7 @@ function explainSmartPlan(target){
         text+=`Eda’nın listesinde ${target} doğrudan olmadığı için, Kerim’in bu tercihten ${target}’a eş durumu yolu kendiliğinden oluşmaz.`;
       }
     }
-    if(EYE.some(y=>y.city===x.city)) text+=` Ayrıca Eda da ${x.city}’ı tercih edebildiği için doğrudan aynı ilde başlama ihtimali vardır.`;
+    if(eligibleChoices(EYE).some(y=>y.city===x.city)) text+=` Ayrıca Eda da ${x.city}’ı tercih edebildiği için doğrudan aynı ilde başlama ihtimali vardır.`;
     if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma açısından avantajdır.`;
     lines.push(text);
   });
@@ -410,9 +450,16 @@ function analyze(){
 document.getElementById('edaAdd').onclick=()=>{if(eda.length<MAX){const x=window.eAvail[+document.getElementById('edaPool').value];if(x){eda.push(x);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}}};
 document.getElementById('kerimAdd').onclick=()=>{if(kerim.length<MAX){const x=window.kAvail[+document.getElementById('kerimPool').value];if(x){kerim.push(x);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}}};
 document.getElementById('edaClear').onclick=()=>{eda=[];renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};document.getElementById('kerimClear').onclick=()=>{kerim=[];renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};
-document.getElementById('edaKast').onclick=()=>{const x=EYE.find(y=>y.city==='KASTAMONU');if(x){eda=eda.filter(y=>y.place!==x.place);eda.unshift(x);eda=eda.slice(0,MAX);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}};
-document.getElementById('kerimSafe').onclick=()=>{const t=document.getElementById('target').value;kerim=CARDIO.filter(x=>x.city===t||canMove('kerim',x.city,t)).sort((a,b)=>(POP[a.city]??50)-(POP[b.city]??50)).slice(0,MAX);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};
+document.getElementById('edaKast').onclick=()=>{const x=eligibleChoices(EYE).find(y=>y.city==='KASTAMONU');if(x){eda=eda.filter(y=>y.place!==x.place);eda.unshift(x);eda=eda.slice(0,MAX);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}};
+document.getElementById('kerimSafe').onclick=()=>{const t=document.getElementById('target').value;kerim=eligibleChoices(CARDIO).filter(x=>x.city===t||canMove('kerim',x.city,t)).sort((a,b)=>(POP[a.city]??50)-(POP[b.city]??50)).slice(0,MAX);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};
 document.getElementById('smartOrder').onclick=smartOrderBoth;
+document.getElementById('noDistrict').onchange=()=>{
+  pruneDistrictSelections();
+  renderAll();
+  renderSmartReasons(document.getElementById('target').value);
+  explainSmartPlan(document.getElementById('target').value);
+  analyze();
+};
 document.getElementById('analyze').onclick=analyze;document.getElementById('sens').oninput=e=>document.getElementById('sensVal').textContent=e.target.value;document.getElementById('sens').onchange=analyze;
 
 const ts=document.getElementById('target');allTargets().sort((a,b)=>a.localeCompare(b,'tr')).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;ts.appendChild(o)});ts.value='KASTAMONU';ts.onchange=()=>{analyze();renderSmartReasons(ts.value);explainSmartPlan(ts.value)};
