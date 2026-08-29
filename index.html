@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DHY Çift Tercih Simülatörü V4</title>
+<title>DHY Çift Tercih Simülatörü V6</title>
 <style>
 :root{--bg:#0b1020;--panel:#131a2e;--card:#19233d;--line:#2b395f;--text:#f3f6ff;--muted:#aab5d3;--accent:#6ea8fe;--good:#56d38b;--warn:#ffd166;--bad:#ff7b7b}
 *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:linear-gradient(160deg,#0b1020,#111a36,#0b1020);color:var(--text)}
@@ -25,7 +25,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
 </head>
 <body>
 <div class="app">
-<h1>🏥 DHY Çift Tercih Simülatörü V4</h1>
+<h1>🏥 DHY Çift Tercih Simülatörü V6</h1>
 <div class="sub">Eda (Göz) + Kerim (Kalp-Damar) — maksimum 10'ar tercih, hedef il ve birleşme ihtimalleri.</div>
 
 <section class="panel" style="margin-top:16px">
@@ -34,7 +34,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
     <label>Rekabet hassasiyeti: <span id="sensVal">60</span>/100<input id="sens" type="range" min="0" max="100" value="60"></label>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button id="smartOrder" class="primary">🧠 Hedef için uygun sıralama ayarla</button><button id="analyze">🎯 Analiz Et</button></div>
   </div>
-  <div class="note"><b>Geçiş kuralı:</b> A en iyi, E en kötü. Eşit sınıfa ve daha kötü sınıfa geçiş var: A→A/B/C/D/E, B→B/C/D/E, C→C/D/E, D→D/E, E→E. Kötüden iyiye geçiş yok.<br><b>Akıllı sıralama:</b> Seçtiğiniz hedef ile göre iki kişi için de 10 tercihi otomatik kurar; doğrudan hedef kadrosunu, hedefe geçişi açık tutan yerleri, ortak-il avantajını, kontenjanı ve tahmini rekabeti birlikte puanlar.</div>
+  <div class="note"><b>Geçiş kuralı:</b> A en iyi, E en kötü. Eşit sınıfa ve daha kötü sınıfa geçiş var: A→A/B/C/D/E, B→B/C/D/E, C→C/D/E, D→D/E, E→E. Kötüden iyiye geçiş yok.<br><b>Akıllı sıralama:</b> Seçtiğiniz hedef il her iki branşta da doğrudan tercih edilebiliyorsa, o ildeki kurum(lar) otomatik olarak listenin en başına alınır; birden fazla kurum varsa kontenjanı yüksek olan önce gelir. Kalan tercihler hedefe geçiş güvenliği, ortak-il avantajı, kontenjan ve tahmini rekabete göre sıralanır.</div>
 </section>
 
 <div class="grid" style="margin-top:16px">
@@ -52,6 +52,15 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
   <div id="kerimList" class="list"></div><div id="kerimWhy" class="note"></div>
 </section>
 </div>
+
+<section class="panel" style="margin-top:16px">
+  <h2>🧠 Algoritma neden bu tercihleri önerdi?</h2>
+  <div class="small">
+    “Hedef için uygun sıralama ayarla” dediğinizde aşağıdaki rota açıklamaları otomatik oluşur.
+    Program her iki branşı kendi A-E sınıfıyla ayrı ayrı değerlendirir.
+  </div>
+  <div id="strategyExplanation" class="path"></div>
+</section>
 
 <section class="panel" style="margin-top:16px">
 <h2>📊 Seçilen hedef için sonuç</h2>
@@ -100,9 +109,9 @@ function renderList(id,data,person){
   const d=document.createElement('div');d.className='item';
   d.innerHTML=`<div class="num">${i+1}</div><div><b>${x.city}</b> <span class="badge">${reg(person,x.city)} grup</span><div class="meta">${x.place} · ${x.cap} kadro · rekabet ${POP[x.city]??50}/100</div></div><div class="actions"><button>↑</button><button>↓</button><button>✕</button></div>`;
   const b=d.querySelectorAll('button');
-  b[0].onclick=()=>{if(i>0){[data[i-1],data[i]]=[data[i],data[i-1]];renderAll();analyze()}};
-  b[1].onclick=()=>{if(i<data.length-1){[data[i+1],data[i]]=[data[i],data[i+1]];renderAll();analyze()}};
-  b[2].onclick=()=>{data.splice(i,1);renderAll();analyze()};
+  b[0].onclick=()=>{if(i>0){[data[i-1],data[i]]=[data[i],data[i-1]];renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}};
+  b[1].onclick=()=>{if(i<data.length-1){[data[i+1],data[i]]=[data[i],data[i+1]];renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}};
+  b[2].onclick=()=>{data.splice(i,1);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};
   host.appendChild(d);
  });
 }
@@ -181,21 +190,132 @@ function candidateSmartScore(person,x,target,spouseAll){
 function buildSmartPrefs(person,target){
   const all = person==='eda' ? EYE : CARDIO;
   const spouseAll = person==='eda' ? CARDIO : EYE;
-  const scored = all.map(x=>({x,score:candidateSmartScore(person,x,target,spouseAll)}))
+
+  // 1) Hedef il bu branşta doğrudan tercih edilebiliyorsa MUTLAKA ilk sıraya gelir.
+  // Aynı hedef ilde birden fazla kurum varsa kontenjanı yüksek olan önce gelir.
+  const directTargets = all
+    .filter(x=>x.city===target)
+    .sort((a,b)=>(b.cap||1)-(a.cap||1));
+
+  const result = [];
+  for(const x of directTargets){
+    if(result.length>=MAX) break;
+    result.push(x);
+  }
+
+  // 2) Kalan yerleri hedefe geçiş güvenliği + ortak il + kontenjan + rekabet ile puanla.
+  const usedPlaces = new Set(result.map(x=>x.place));
+  const scored = all
+    .filter(x=>!usedPlaces.has(x.place))
+    .map(x=>({x,score:candidateSmartScore(person,x,target,spouseAll)}))
     .filter(o=>o.score>-4000)
     .sort((a,b)=>b.score-a.score);
 
-  // Aynı şehirden gereksiz tekrarları azalt ama hedef şehirde birden çok kurum varsa
-  // kontenjan avantajı nedeniyle en fazla 2 kurum tutulabilir.
-  const result=[], cityCounts=new Map();
+  const cityCounts = new Map();
+  for(const x of result) cityCounts.set(x.city,(cityCounts.get(x.city)||0)+1);
+
   for(const o of scored){
     if(result.length>=MAX) break;
     const c=o.x.city, n=cityCounts.get(c)||0;
-    const limit = c===target ? 2 : 1;
+
+    // Hedef dışındaki illerde çeşitlilik için bir kurum; hedef ilde direkt kadroların hepsi korunabilir.
+    const limit = c===target ? 10 : 1;
     if(n>=limit) continue;
-    result.push(o.x); cityCounts.set(c,n+1);
+
+    result.push(o.x);
+    cityCounts.set(c,n+1);
   }
-  return result;
+  return result.slice(0,MAX);
+}
+
+
+function explainSmartPlan(target){
+  const box=document.getElementById('strategyExplanation');
+  if(!box) return;
+
+  const lines=[];
+  const targetEye=reg('eda',target);
+  const targetKvc=reg('kerim',target);
+
+  const eDirect=eda.filter(x=>x.city===target);
+  const kDirect=kerim.filter(x=>x.city===target);
+
+  if(eDirect.length && kDirect.length){
+    lines.push(`<b>Doğrudan birleşme planı:</b> ${target} her iki branşta da tercih edilebildiği için iki listenin başına hedef il alınır. Eda ${target}’a, Kerim de ${target}’a atanırsa eş durumu beklemeden doğrudan aynı ilde olurlar.`);
+  } else if(eDirect.length){
+    lines.push(`<b>Eda hedefe doğrudan gidebilir:</b> Eda ${target}’ı doğrudan tercih edebildiği için hedefe yerleşmesi ana senaryodur. Kerim için sonraki tercihler, bulunduğu KVC sınıfından ${target} KVC ${targetKvc} grubuna geçişi açık tutacak şekilde seçilir.`);
+  } else if(kDirect.length){
+    lines.push(`<b>Kerim hedefe doğrudan gidebilir:</b> Kerim ${target}’ı doğrudan tercih edebildiği için hedefe yerleşmesi ana senaryodur. Eda için sonraki tercihler, bulunduğu Göz sınıfından ${target} Göz ${targetEye} grubuna geçişi açık tutacak şekilde seçilir.`);
+  } else {
+    lines.push(`<b>Hedefe doğrudan kadro yok:</b> ${target} iki listenin de doğrudan hedefi değil. Bu yüzden program, ikisinin de sonradan ${target}’a geçebilmesini sağlayan daha iyi/eşit bölge sınıflarındaki tercihleri öne çıkarır.`);
+  }
+
+  // Explain Eda's first few options
+  eda.slice(0,5).forEach((x,i)=>{
+    const here=reg('eda',x.city);
+    const direct=x.city===target;
+    const move=direct || canMove('eda',x.city,target);
+    let text=`<b>Eda ${i+1}. tercih: ${x.city}</b> — Göz ${here} grubu. `;
+    if(direct){
+      text+=`Hedef il olduğu için doğrudan ${target}’da kalır.`;
+    } else if(move){
+      text+=`${here} → ${targetEye} geçişi kurala uygundur; yani Eda ${x.city}’a atanırsa sonradan ${target}’a eş durumu yolu açık kalır.`;
+    } else {
+      text+=`${here} → ${targetEye} geçişi uygun değildir; bu tercih hedefe ulaşma açısından risklidir.`;
+    }
+    if(CARDIO.some(y=>y.city===x.city)){
+      text+=` Ayrıca Kerim’in de aynı ili tercih edebilme ihtimali olduğu için başlangıçta aynı şehir senaryosu vardır.`;
+    }
+    if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma ihtimalini destekleyen bir avantajdır.`;
+    lines.push(text);
+  });
+
+  // Explain Kerim's first few options
+  kerim.slice(0,5).forEach((x,i)=>{
+    const here=reg('kerim',x.city);
+    const direct=x.city===target;
+    const move=direct || canMove('kerim',x.city,target);
+    let text=`<b>Kerim ${i+1}. tercih: ${x.city}</b> — KVC ${here} grubu. `;
+    if(direct){
+      text+=`Hedef il olduğu için doğrudan ${target}’da kalır.`;
+    } else if(move){
+      text+=`${here} → ${targetKvc} geçişi kurala uygundur; yani Kerim ${x.city}’a atanırsa sonradan ${target}’a eş durumu yolu açık kalır.`;
+    } else {
+      text+=`${here} → ${targetKvc} geçişi uygun değildir; bu tercih hedefe ulaşma açısından risklidir.`;
+    }
+    if(EYE.some(y=>y.city===x.city)){
+      text+=` Ayrıca Eda’nın da aynı ili tercih edebilme ihtimali olduğu için başlangıçta aynı şehir senaryosu vardır.`;
+    }
+    if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma ihtimalini destekleyen bir avantajdır.`;
+    lines.push(text);
+  });
+
+  // Add a couple of pair-based “if this happens, then…” examples from top selections.
+  const pairExamples=[];
+  for(const e of eda.slice(0,4)){
+    for(const k of kerim.slice(0,4)){
+      const eCan = e.city===target || canMove('eda',e.city,target);
+      const kCan = k.city===target || canMove('kerim',k.city,target);
+      if(eCan && kCan){
+        let t=`Eda ${e.city}’a, Kerim ${k.city}’a atanırsa `;
+        if(e.city===k.city){
+          t+=`zaten aynı ilde başlarlar.`;
+        } else if(e.city===target){
+          t+=`Eda hedefte kalır; Kerim ${reg('kerim',k.city)} → ${targetKvc} geçişiyle ${target}’a gelebilir.`;
+        } else if(k.city===target){
+          t+=`Kerim hedefte kalır; Eda ${reg('eda',e.city)} → ${targetEye} geçişiyle ${target}’a gelebilir.`;
+        } else {
+          t+=`her ikisinin de kendi branşında ${target}’a geçiş yolu açık kalır.`;
+        }
+        pairExamples.push(t);
+      }
+      if(pairExamples.length>=3) break;
+    }
+    if(pairExamples.length>=3) break;
+  }
+  pairExamples.forEach(t=>lines.push(`<b>Alternatif senaryo:</b> ${t}`));
+
+  box.innerHTML=lines.map((t,i)=>`<div class="pathRow"><b>${i+1}-</b> ${t}</div>`).join('');
 }
 
 function smartOrderBoth(){
@@ -204,6 +324,7 @@ function smartOrderBoth(){
   kerim=buildSmartPrefs('kerim',target);
   renderAll();
   renderSmartReasons(target);
+  explainSmartPlan(target);
   analyze();
 }
 
@@ -213,7 +334,7 @@ function renderSmartReasons(target){
     if(!data.length) return 'Uygun güvenli tercih bulunamadı.';
     return data.slice(0,5).map((x,i)=>{
       const tags=[];
-      if(x.city===target) tags.push('doğrudan hedef');
+      if(x.city===target) tags.push('DOĞRUDAN HEDEF — zorunlu öncelik');
       if(canMove(person,x.city,target) || x.city===target) tags.push('hedefe geçiş açık');
       if(spouseAll.some(y=>y.city===x.city)) tags.push('ortak il potansiyeli');
       if((x.cap||1)>1) tags.push(x.cap+' kadro');
@@ -240,15 +361,15 @@ function analyze(){
  document.getElementById('unionTable').innerHTML='<table><tr><th>#</th><th>Birleşme ili</th><th>Göz</th><th>KVC</th><th>Model ihtimali</th><th>İlk atamada aynı il</th><th>Rekabet</th></tr>'+unions.slice(0,30).map((x,i)=>`<tr><td>${i+1}</td><td><b>${x.city}</b></td><td>${x.er}</td><td>${x.kr}</td><td class="${x.p>=.6?'good':x.p>=.35?'warn':'bad'}"><b>${pct(x.p)}</b></td><td>${pct(x.same)}</td><td>${x.pop}/100</td></tr>`).join('')+'</table>';
 }
 
-document.getElementById('edaAdd').onclick=()=>{if(eda.length<MAX){const x=window.eAvail[+document.getElementById('edaPool').value];if(x){eda.push(x);renderAll();analyze()}}};
-document.getElementById('kerimAdd').onclick=()=>{if(kerim.length<MAX){const x=window.kAvail[+document.getElementById('kerimPool').value];if(x){kerim.push(x);renderAll();analyze()}}};
-document.getElementById('edaClear').onclick=()=>{eda=[];renderAll();analyze()};document.getElementById('kerimClear').onclick=()=>{kerim=[];renderAll();analyze()};
-document.getElementById('edaKast').onclick=()=>{const x=EYE.find(y=>y.city==='KASTAMONU');if(x){eda=eda.filter(y=>y.place!==x.place);eda.unshift(x);eda=eda.slice(0,MAX);renderAll();analyze()}};
-document.getElementById('kerimSafe').onclick=()=>{const t=document.getElementById('target').value;kerim=CARDIO.filter(x=>x.city===t||canMove('kerim',x.city,t)).sort((a,b)=>(POP[a.city]??50)-(POP[b.city]??50)).slice(0,MAX);renderAll();analyze()};
+document.getElementById('edaAdd').onclick=()=>{if(eda.length<MAX){const x=window.eAvail[+document.getElementById('edaPool').value];if(x){eda.push(x);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}}};
+document.getElementById('kerimAdd').onclick=()=>{if(kerim.length<MAX){const x=window.kAvail[+document.getElementById('kerimPool').value];if(x){kerim.push(x);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}}};
+document.getElementById('edaClear').onclick=()=>{eda=[];renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};document.getElementById('kerimClear').onclick=()=>{kerim=[];renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};
+document.getElementById('edaKast').onclick=()=>{const x=EYE.find(y=>y.city==='KASTAMONU');if(x){eda=eda.filter(y=>y.place!==x.place);eda.unshift(x);eda=eda.slice(0,MAX);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()}};
+document.getElementById('kerimSafe').onclick=()=>{const t=document.getElementById('target').value;kerim=CARDIO.filter(x=>x.city===t||canMove('kerim',x.city,t)).sort((a,b)=>(POP[a.city]??50)-(POP[b.city]??50)).slice(0,MAX);renderAll();explainSmartPlan(document.getElementById('target').value);analyze()};
 document.getElementById('smartOrder').onclick=smartOrderBoth;
 document.getElementById('analyze').onclick=analyze;document.getElementById('sens').oninput=e=>document.getElementById('sensVal').textContent=e.target.value;document.getElementById('sens').onchange=analyze;
 
-const ts=document.getElementById('target');allTargets().sort((a,b)=>a.localeCompare(b,'tr')).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;ts.appendChild(o)});ts.value='KASTAMONU';ts.onchange=()=>{analyze();renderSmartReasons(ts.value)};
-fillDefaults();renderAll();renderSmartReasons('KASTAMONU');analyze();
+const ts=document.getElementById('target');allTargets().sort((a,b)=>a.localeCompare(b,'tr')).forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;ts.appendChild(o)});ts.value='KASTAMONU';ts.onchange=()=>{analyze();renderSmartReasons(ts.value);explainSmartPlan(ts.value)};
+fillDefaults();renderAll();renderSmartReasons('KASTAMONU');explainSmartPlan('KASTAMONU');analyze();
 </script>
 </body></html>
