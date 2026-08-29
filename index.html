@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DHY Çift Tercih Simülatörü V6</title>
+<title>DHY Çift Tercih Simülatörü V7</title>
 <style>
 :root{--bg:#0b1020;--panel:#131a2e;--card:#19233d;--line:#2b395f;--text:#f3f6ff;--muted:#aab5d3;--accent:#6ea8fe;--good:#56d38b;--warn:#ffd166;--bad:#ff7b7b}
 *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Segoe UI,Arial,sans-serif;background:linear-gradient(160deg,#0b1020,#111a36,#0b1020);color:var(--text)}
@@ -25,7 +25,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
 </head>
 <body>
 <div class="app">
-<h1>🏥 DHY Çift Tercih Simülatörü V6</h1>
+<h1>🏥 DHY Çift Tercih Simülatörü V7</h1>
 <div class="sub">Eda (Göz) + Kerim (Kalp-Damar) — maksimum 10'ar tercih, hedef il ve birleşme ihtimalleri.</div>
 
 <section class="panel" style="margin-top:16px">
@@ -76,7 +76,7 @@ table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px} th,td{
 
 <section class="panel" style="margin-top:16px">
 <h2>🧭 Tercihlerimize göre nerelerde birleşebiliriz?</h2>
-<div class="small">Seçtiğiniz 10+10 tercih üzerinden olası ilk atama çiftleri simüle edilir; her çift için A-E kuralına göre ikinizin de gidebileceği ortak iller taranır.</div>
+<div class="small">Seçtiğiniz 10+10 tercih üzerinden olası ilk atama çiftleri simüle edilir. Birleşme ili yalnızca eşlerden birinin fiilen atandığı il olabilir; diğer eşin o ile kendi branşındaki A-E kuralıyla eş durumu geçişi mümkünse birleşme sayılır.</div>
 <div id="unionSummary" class="result"></div>
 <div id="unionTable"></div>
 <div class="note">⚠️ Yüzdeler resmi kura olasılığı değildir. Geçmiş gerçek tercih/kura datası olmadığı için tercih sırası, kontenjan, şehir çekiciliği ve A-E geçiş uygunluğunu kullanan sezgisel bir modeldir. Gerçek kadro boşluğu/eş durumu mevzuat şartları ayrıca aranır.</div>
@@ -137,17 +137,55 @@ function pick(data,sens){
 }
 function simulate(target,sens,runs=12000){
  let reach=0,same=0;const pairs=new Map();
- for(let n=0;n<runs;n++){const e=pick(eda,sens),k=pick(kerim,sens);if(!e||!k)continue;if(e.city===k.city)same++;
-  const okE=e.city===target||canMove('eda',e.city,target),okK=k.city===target||canMove('kerim',k.city,target);
-  if(okE&&okK)reach++;const key=e.city+'|'+k.city;pairs.set(key,(pairs.get(key)||0)+1)}
+ for(let n=0;n<runs;n++){
+  const e=pick(eda,sens),k=pick(kerim,sens);if(!e||!k)continue;
+  if(e.city===k.city)same++;
+
+  const eAtTarget=e.city===target;
+  const kAtTarget=k.city===target;
+
+  // Eş durumu yalnızca eşlerden biri HEDEF İLDE fiilen görevliyse devreye girer.
+  // İkisi de başka illerdeyse, sırf ikisinin de hedefe bölge geçişi uygun diye hedefe taşınmış sayılmazlar.
+  let canUniteAtTarget=false;
+  if(eAtTarget && kAtTarget){
+    canUniteAtTarget=true;
+  } else if(eAtTarget){
+    canUniteAtTarget=canMove('kerim',k.city,target);
+  } else if(kAtTarget){
+    canUniteAtTarget=canMove('eda',e.city,target);
+  }
+
+  if(canUniteAtTarget)reach++;
+  const key=e.city+'|'+k.city;pairs.set(key,(pairs.get(key)||0)+1);
+ }
  return {reach:reach/runs,same:same/runs,pairs:[...pairs.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8)}
 }
 function allTargets(){return Object.keys(EYE_REGION).filter(c=>CARDIO_REGION[c])}
 function simulateUnions(sens,runs=12000){
  const hits=new Map(),direct=new Map();
- for(let n=0;n<runs;n++){const e=pick(eda,sens),k=pick(kerim,sens);if(!e||!k)continue;if(e.city===k.city)direct.set(e.city,(direct.get(e.city)||0)+1);
-  for(const c of allTargets()){if((e.city===c||canMove('eda',e.city,c))&&(k.city===c||canMove('kerim',k.city,c)))hits.set(c,(hits.get(c)||0)+1)}}
- return [...hits].map(([city,count])=>({city,p:count/runs,same:(direct.get(city)||0)/runs,er:EYE_REGION[city],kr:CARDIO_REGION[city],pop:POP[city]??50})).sort((a,b)=>b.p-a.p)
+ for(let n=0;n<runs;n++){
+  const e=pick(eda,sens),k=pick(kerim,sens);if(!e||!k)continue;
+
+  if(e.city===k.city){
+    direct.set(e.city,(direct.get(e.city)||0)+1);
+    hits.set(e.city,(hits.get(e.city)||0)+1);
+    continue;
+  }
+
+  // Eda'nın bulunduğu ile Kerim eş durumu ile gelebiliyor mu?
+  if(canMove('kerim',k.city,e.city)){
+    hits.set(e.city,(hits.get(e.city)||0)+1);
+  }
+
+  // Kerim'in bulunduğu ile Eda eş durumu ile gelebiliyor mu?
+  if(canMove('eda',e.city,k.city)){
+    hits.set(k.city,(hits.get(k.city)||0)+1);
+  }
+ }
+ return [...hits].map(([city,count])=>({
+   city,p:count/runs,same:(direct.get(city)||0)/runs,
+   er:EYE_REGION[city]||'?',kr:CARDIO_REGION[city]||'?',pop:POP[city]??50
+ })).sort((a,b)=>b.p-a.p)
 }
 
 function candidateSmartScore(person,x,target,spouseAll){
@@ -241,79 +279,80 @@ function explainSmartPlan(target){
   const kDirect=kerim.filter(x=>x.city===target);
 
   if(eDirect.length && kDirect.length){
-    lines.push(`<b>Doğrudan birleşme planı:</b> ${target} her iki branşta da tercih edilebildiği için iki listenin başına hedef il alınır. Eda ${target}’a, Kerim de ${target}’a atanırsa eş durumu beklemeden doğrudan aynı ilde olurlar.`);
+    lines.push(`<b>Ana hedef:</b> ${target} iki branşta da doğrudan tercih edilebildiği için her iki listede de en üste alınır. İkisi de ${target}’a atanırsa doğrudan birleşirler.`);
   } else if(eDirect.length){
-    lines.push(`<b>Eda hedefe doğrudan gidebilir:</b> Eda ${target}’ı doğrudan tercih edebildiği için hedefe yerleşmesi ana senaryodur. Kerim için sonraki tercihler, bulunduğu KVC sınıfından ${target} KVC ${targetKvc} grubuna geçişi açık tutacak şekilde seçilir.`);
+    lines.push(`<b>Ana hedef:</b> Eda ${target}’ı doğrudan tercih edebiliyor. Bu senaryoda Eda ${target}’a atanırsa, Kerim ancak kendi atandığı ilin KVC grubundan ${target} KVC ${targetKvc} grubuna geçiş uygunsa Eda’nın yanına eş durumu ile gelebilir.`);
   } else if(kDirect.length){
-    lines.push(`<b>Kerim hedefe doğrudan gidebilir:</b> Kerim ${target}’ı doğrudan tercih edebildiği için hedefe yerleşmesi ana senaryodur. Eda için sonraki tercihler, bulunduğu Göz sınıfından ${target} Göz ${targetEye} grubuna geçişi açık tutacak şekilde seçilir.`);
+    lines.push(`<b>Ana hedef:</b> Kerim ${target}’ı doğrudan tercih edebiliyor. Bu senaryoda Kerim ${target}’a atanırsa, Eda ancak kendi atandığı ilin Göz grubundan ${target} Göz ${targetEye} grubuna geçiş uygunsa Kerim’in yanına eş durumu ile gelebilir.`);
   } else {
-    lines.push(`<b>Hedefe doğrudan kadro yok:</b> ${target} iki listenin de doğrudan hedefi değil. Bu yüzden program, ikisinin de sonradan ${target}’a geçebilmesini sağlayan daha iyi/eşit bölge sınıflarındaki tercihleri öne çıkarır.`);
+    lines.push(`<b>Önemli:</b> ${target} iki listede de doğrudan tercih edilemiyorsa, sadece A-E geçişi uygun diye ikisi de ${target}’a gidemez. Eş durumu için eşlerden birinin önce o ilde görevli olması gerekir.`);
   }
 
-  // Explain Eda's first few options
+  // Explain each Eda preference correctly: it only helps target if Kerim can actually be in target.
   eda.slice(0,5).forEach((x,i)=>{
     const here=reg('eda',x.city);
-    const direct=x.city===target;
-    const move=direct || canMove('eda',x.city,target);
     let text=`<b>Eda ${i+1}. tercih: ${x.city}</b> — Göz ${here} grubu. `;
-    if(direct){
-      text+=`Hedef il olduğu için doğrudan ${target}’da kalır.`;
-    } else if(move){
-      text+=`${here} → ${targetEye} geçişi kurala uygundur; yani Eda ${x.city}’a atanırsa sonradan ${target}’a eş durumu yolu açık kalır.`;
+    if(x.city===target){
+      text+=`Eda doğrudan hedef ilde olur. Kerim başka bir ile atanırsa, Kerim’in kendi KVC grubundan ${target} KVC ${targetKvc} grubuna geçişi uygunsa eş durumu ile Eda’nın yanına gelebilir.`;
     } else {
-      text+=`${here} → ${targetEye} geçişi uygun değildir; bu tercih hedefe ulaşma açısından risklidir.`;
+      const kerimCanBeTarget = kDirect.length>0;
+      if(kerimCanBeTarget && canMove('eda',x.city,target)){
+        text+=`Bu tercih tek başına Eda’yı ${target}’a götürmez. Ancak Kerim ${target}’a atanırsa, Eda ${here} → ${targetEye} geçişi uygun olduğu için eş durumu ile Kerim’in yanına gelebilir.`;
+      } else if(kerimCanBeTarget){
+        text+=`Kerim ${target}’a atansa bile Eda için ${here} → ${targetEye} geçişi uygun olmadığı için bu tercih hedef birleşme açısından risklidir.`;
+      } else {
+        text+=`Kerim’in listesinde ${target} doğrudan olmadığı için, Eda’nın bu tercihten ${target}’a eş durumu yolu kendiliğinden oluşmaz.`;
+      }
     }
-    if(CARDIO.some(y=>y.city===x.city)){
-      text+=` Ayrıca Kerim’in de aynı ili tercih edebilme ihtimali olduğu için başlangıçta aynı şehir senaryosu vardır.`;
-    }
-    if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma ihtimalini destekleyen bir avantajdır.`;
+    if(CARDIO.some(y=>y.city===x.city)) text+=` Ayrıca Kerim de ${x.city}’ı tercih edebildiği için doğrudan aynı ilde başlama ihtimali vardır.`;
+    if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma açısından avantajdır.`;
     lines.push(text);
   });
 
-  // Explain Kerim's first few options
   kerim.slice(0,5).forEach((x,i)=>{
     const here=reg('kerim',x.city);
-    const direct=x.city===target;
-    const move=direct || canMove('kerim',x.city,target);
     let text=`<b>Kerim ${i+1}. tercih: ${x.city}</b> — KVC ${here} grubu. `;
-    if(direct){
-      text+=`Hedef il olduğu için doğrudan ${target}’da kalır.`;
-    } else if(move){
-      text+=`${here} → ${targetKvc} geçişi kurala uygundur; yani Kerim ${x.city}’a atanırsa sonradan ${target}’a eş durumu yolu açık kalır.`;
+    if(x.city===target){
+      text+=`Kerim doğrudan hedef ilde olur. Eda başka bir ile atanırsa, Eda’nın kendi Göz grubundan ${target} Göz ${targetEye} grubuna geçişi uygunsa eş durumu ile Kerim’in yanına gelebilir.`;
     } else {
-      text+=`${here} → ${targetKvc} geçişi uygun değildir; bu tercih hedefe ulaşma açısından risklidir.`;
+      const edaCanBeTarget = eDirect.length>0;
+      if(edaCanBeTarget && canMove('kerim',x.city,target)){
+        text+=`Bu tercih tek başına Kerim’i ${target}’a götürmez. Ancak Eda ${target}’a atanırsa, Kerim ${here} → ${targetKvc} geçişi uygun olduğu için eş durumu ile Eda’nın yanına gelebilir.`;
+      } else if(edaCanBeTarget){
+        text+=`Eda ${target}’a atansa bile Kerim için ${here} → ${targetKvc} geçişi uygun olmadığı için bu tercih hedef birleşme açısından risklidir.`;
+      } else {
+        text+=`Eda’nın listesinde ${target} doğrudan olmadığı için, Kerim’in bu tercihten ${target}’a eş durumu yolu kendiliğinden oluşmaz.`;
+      }
     }
-    if(EYE.some(y=>y.city===x.city)){
-      text+=` Ayrıca Eda’nın da aynı ili tercih edebilme ihtimali olduğu için başlangıçta aynı şehir senaryosu vardır.`;
-    }
-    if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma ihtimalini destekleyen bir avantajdır.`;
+    if(EYE.some(y=>y.city===x.city)) text+=` Ayrıca Eda da ${x.city}’ı tercih edebildiği için doğrudan aynı ilde başlama ihtimali vardır.`;
+    if((x.cap||1)>1) text+=` ${x.cap} kadro olması atanma açısından avantajdır.`;
     lines.push(text);
   });
 
-  // Add a couple of pair-based “if this happens, then…” examples from top selections.
-  const pairExamples=[];
+  // Concrete pair scenarios among top choices.
+  let ex=0;
   for(const e of eda.slice(0,4)){
     for(const k of kerim.slice(0,4)){
-      const eCan = e.city===target || canMove('eda',e.city,target);
-      const kCan = k.city===target || canMove('kerim',k.city,target);
-      if(eCan && kCan){
-        let t=`Eda ${e.city}’a, Kerim ${k.city}’a atanırsa `;
-        if(e.city===k.city){
-          t+=`zaten aynı ilde başlarlar.`;
-        } else if(e.city===target){
-          t+=`Eda hedefte kalır; Kerim ${reg('kerim',k.city)} → ${targetKvc} geçişiyle ${target}’a gelebilir.`;
-        } else if(k.city===target){
-          t+=`Kerim hedefte kalır; Eda ${reg('eda',e.city)} → ${targetEye} geçişiyle ${target}’a gelebilir.`;
-        } else {
-          t+=`her ikisinin de kendi branşında ${target}’a geçiş yolu açık kalır.`;
+      if(ex>=4) break;
+      let t='';
+      if(e.city===k.city){
+        t=`Eda ${e.city}’a ve Kerim de ${k.city}’a atanırsa zaten aynı ilde başlarlar.`;
+      } else if(e.city===target && canMove('kerim',k.city,target)){
+        t=`Eda ${target}’a, Kerim ${k.city}’a atanırsa; Eda hedefte olduğu için Kerim ${reg('kerim',k.city)} → ${targetKvc} geçişiyle eş durumu üzerinden ${target}’a gelebilir.`;
+      } else if(k.city===target && canMove('eda',e.city,target)){
+        t=`Kerim ${target}’a, Eda ${e.city}’a atanırsa; Kerim hedefte olduğu için Eda ${reg('eda',e.city)} → ${targetEye} geçişiyle eş durumu üzerinden ${target}’a gelebilir.`;
+      } else {
+        // Could unite in one spouse's actual city instead of the selected target.
+        if(canMove('kerim',k.city,e.city)){
+          t=`Eda ${e.city}’a, Kerim ${k.city}’a atanırsa; Kerim kendi KVC grubundan ${e.city} KVC ${reg('kerim',e.city)} grubuna geçiş uygunsa Eda’nın bulunduğu ${e.city}’da birleşebilirler.`;
+        } else if(canMove('eda',e.city,k.city)){
+          t=`Eda ${e.city}’a, Kerim ${k.city}’a atanırsa; Eda kendi Göz grubundan ${k.city} Göz ${reg('eda',k.city)} grubuna geçiş uygunsa Kerim’in bulunduğu ${k.city}’da birleşebilirler.`;
         }
-        pairExamples.push(t);
       }
-      if(pairExamples.length>=3) break;
+      if(t){lines.push(`<b>Örnek senaryo:</b> ${t}`);ex++;}
     }
-    if(pairExamples.length>=3) break;
+    if(ex>=4) break;
   }
-  pairExamples.forEach(t=>lines.push(`<b>Alternatif senaryo:</b> ${t}`));
 
   box.innerHTML=lines.map((t,i)=>`<div class="pathRow"><b>${i+1}-</b> ${t}</div>`).join('');
 }
@@ -353,8 +392,15 @@ function analyze(){
  const risk=sim.reach>=.70?['Düşük','good']:sim.reach>=.45?['Orta','warn']:['Yüksek','bad'];
  document.getElementById('score').textContent=score+'/100';document.getElementById('chance').textContent=pct(sim.reach);document.getElementById('sameCity').textContent=pct(sim.same);document.getElementById('risk').innerHTML=`<span class="${risk[1]}">${risk[0]}</span>`;
  const es=eda.filter(x=>x.city===target||canMove('eda',x.city,target));const ks=kerim.filter(x=>x.city===target||canMove('kerim',x.city,target));
- document.getElementById('paths').innerHTML=`<div class="pathRow"><b>🎯 ${target}</b> — Göz ${er}, KVC ${kr}</div><div class="pathRow"><b>Eda'dan hedefe uygun tercihler:</b> ${es.map(x=>x.city+' ('+reg('eda',x.city)+')').join(', ')||'yok'}</div><div class="pathRow"><b>Kerim'den hedefe uygun tercihler:</b> ${ks.map(x=>x.city+' ('+reg('kerim',x.city)+')').join(', ')||'yok'}</div>`;
- document.getElementById('scenarioTable').innerHTML='<h3>En sık model senaryoları</h3><table><tr><th>Eda</th><th>Kerim</th><th>Frekans</th><th>Hedef yolu</th></tr>'+sim.pairs.map(([key,n])=>{const [e,k]=key.split('|'),ok=(e===target||canMove('eda',e,target))&&(k===target||canMove('kerim',k,target));return `<tr><td>${e}</td><td>${k}</td><td>${pct(n/12000)}</td><td class="${ok?'good':'bad'}">${ok?'Açık':'Kapalı/Riskli'}</td></tr>`}).join('')+'</table>';
+ document.getElementById('paths').innerHTML=`
+ <div class="pathRow"><b>🎯 ${target}</b> — Göz ${er}, KVC ${kr}</div>
+ <div class="pathRow"><b>Hedef birleşme şartı:</b> Eşlerden en az biri ${target}’a fiilen atanmış olmalı. Diğer eş ancak kendi branşındaki A-E geçiş kuralı uygunsa eş durumu ile onun yanına gelebilir.</div>
+ <div class="pathRow"><b>Eda ${target}’a atanırsa Kerim’den gelebilecek tercihler:</b> ${kerim.filter(x=>x.city===target||canMove('kerim',x.city,target)).map(x=>x.city+' ('+reg('kerim',x.city)+')').join(', ')||'yok'}</div>
+ <div class="pathRow"><b>Kerim ${target}’a atanırsa Eda’dan gelebilecek tercihler:</b> ${eda.filter(x=>x.city===target||canMove('eda',x.city,target)).map(x=>x.city+' ('+reg('eda',x.city)+')').join(', ')||'yok'}</div>`;
+ document.getElementById('scenarioTable').innerHTML='<h3>En sık model senaryoları</h3><table><tr><th>Eda</th><th>Kerim</th><th>Frekans</th><th>Hedef yolu</th></tr>'+sim.pairs.map(([key,n])=>{const [e,k]=key.split('|');
+ const ok=(e===target&&k===target) ||
+          (e===target&&canMove('kerim',k,target)) ||
+          (k===target&&canMove('eda',e,target));return `<tr><td>${e}</td><td>${k}</td><td>${pct(n/12000)}</td><td class="${ok?'good':'bad'}">${ok?'Açık':'Kapalı/Riskli'}</td></tr>`}).join('')+'</table>';
 
  const unions=simulateUnions(sens),top=unions[0],strong=unions.filter(x=>x.p>=.60).length;
  document.getElementById('unionSummary').innerHTML=top?`<div class="stat"><span class="small">En güçlü birleşme</span><b>${top.city}</b><div class="small">${pct(top.p)}</div></div><div class="stat"><span class="small">≥%60 rota</span><b>${strong}</b></div><div class="stat"><span class="small">Hesaplanan ortak il</span><b>${unions.length}</b></div><div class="stat"><span class="small">Simülasyon</span><b>12.000</b></div>`:'';
